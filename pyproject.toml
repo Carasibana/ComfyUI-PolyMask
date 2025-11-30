@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-polymask"
+description = "ComfyUI nodes for loading images and drawing polygon masks interactively on them"
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = ["numpy", "torch"]
+
+[project.urls]
+Repository = "https://github.com/Carasibana/ComfyUI-PolyMask"
+
+[tool.comfy]
+PublisherId = "carasibana"
+DisplayName = "ComfyUI-PolyMask"
