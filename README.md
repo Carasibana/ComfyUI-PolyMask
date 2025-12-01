@@ -7,7 +7,7 @@ A ComfyUI custom node for creating polygon masks directly in the workflow editor
 ## Features
 
 - **Poly Mask Loader** - Single polygon mask creation
-- **Poly Mask Loader (Multi)** - Up to 6 polygon masks with additive/subtractive modes
+- **Poly Mask Loader (Multi)** - Up to 6 polygons to contribute to the shape of one mask via additive/subtractive modes
 
 ### Controls
 
