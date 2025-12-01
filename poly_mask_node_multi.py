@@ -99,8 +99,11 @@ class PolyMaskNodeMulti:
         # Start with empty mask
         combined_mask = np.zeros((height, width), dtype=np.float32)
         
+        # Process polygons in order (0-5) - higher index overrides lower
         for polygon_obj in polygons:
             points = polygon_obj.get('points', [])
+            mode = polygon_obj.get('mode', 'add')
+            
             # Only include polygons with 3+ points
             if len(points) >= 3:
                 mask_img = Image.new('L', (width, height), 0)
@@ -109,10 +112,19 @@ class PolyMaskNodeMulti:
                 draw.polygon(polygon_coords, fill=255)
                 
                 mask_array = np.array(mask_img).astype(np.float32) / 255.0
-                combined_mask = np.maximum(combined_mask, mask_array)
+                
+                if mode == "add":
+                    # Additive: union with existing mask
+                    combined_mask = np.maximum(combined_mask, mask_array)
+                else:
+                    # Subtractive: remove from existing mask
+                    combined_mask = np.where(mask_array > 0, 0, combined_mask)
         
         # If no valid polygons, return all white (no mask)
-        if combined_mask.max() == 0:
+        if combined_mask.max() == 0 and not any(
+            p.get('mode') == 'subtract' and len(p.get('points', [])) >= 3 
+            for p in polygons
+        ):
             return np.ones((height, width), dtype=np.float32)
         
         # Apply feathering to combined mask
