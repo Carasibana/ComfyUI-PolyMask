@@ -29,6 +29,8 @@ app.registerExtension({
             this.draggingPointIndex = -1;
             this.draggingPointPolygon = -1;
             this.currentCanvasHeight = 200;
+            // Base layer: true (mask starts filled/full) or false (mask starts empty)
+            this.baseLayer = false;
             
             // Configuration
             this.pointRadius = 10;
@@ -98,13 +100,20 @@ app.registerExtension({
             // Find image widget
             const imageWidget = this.widgets.find(w => w.name === "image");
             
-            // Create polygon selector buttons container with two rows
+            // Create polygon selector buttons container with two rows + base toggle on right
             const selectorContainer = document.createElement("div");
             selectorContainer.style.display = "flex";
-            selectorContainer.style.flexDirection = "column";
-            selectorContainer.style.gap = "4px";
+            selectorContainer.style.flexDirection = "row";
+            selectorContainer.style.gap = "8px";
             selectorContainer.style.justifyContent = "center";
+            selectorContainer.style.alignItems = "stretch";
             selectorContainer.style.padding = "4px";
+            
+            // Left side: polygon rows
+            const polygonRowsContainer = document.createElement("div");
+            polygonRowsContainer.style.display = "flex";
+            polygonRowsContainer.style.flexDirection = "column";
+            polygonRowsContainer.style.gap = "4px";
             
             // Additive row
             const addRow = document.createElement("div");
@@ -219,15 +228,52 @@ app.registerExtension({
                 this.polygonButtonsSub.push(btnSub);
             }
             
-            selectorContainer.appendChild(addRow);
-            selectorContainer.appendChild(subRow);
+            polygonRowsContainer.appendChild(addRow);
+            polygonRowsContainer.appendChild(subRow);
+            
+            // Base Layer toggle button (spans both rows on the LEFT)
+            const baseToggleBtn = document.createElement("button");
+            baseToggleBtn.textContent = "Base Layer:\nEmpty";
+            baseToggleBtn.style.minWidth = "70px";
+            baseToggleBtn.style.padding = "4px 10px";
+            baseToggleBtn.style.borderRadius = "6px";
+            baseToggleBtn.style.border = "2px solid #444";
+            baseToggleBtn.style.background = "#1a1a1a";
+            baseToggleBtn.style.color = "#fff";
+            baseToggleBtn.style.fontWeight = "bold";
+            baseToggleBtn.style.fontSize = "12px";
+            baseToggleBtn.style.cursor = "pointer";
+            baseToggleBtn.style.whiteSpace = "pre-line";
+            baseToggleBtn.style.lineHeight = "1.3";
+            baseToggleBtn.style.textAlign = "center";
+            baseToggleBtn.style.transition = "background 0.15s, border-color 0.15s";
+
+            baseToggleBtn.addEventListener("click", () => {
+                node.baseLayer = !node.baseLayer;
+                node.updateBaseLayerButton();
+                node.updatePolygonData();
+                node.renderCanvas();
+            });
+
+            baseToggleBtn.addEventListener("mouseenter", () => {
+                baseToggleBtn.style.background = node.baseLayer ? "#4a4a4a" : "#2a2a2a";
+            });
+            baseToggleBtn.addEventListener("mouseleave", () => {
+                baseToggleBtn.style.background = node.baseLayer ? "#3a3a3a" : "#1a1a1a";
+            });
+
+            this.baseToggleBtn = baseToggleBtn;
+            
+            // Add base button on LEFT, then polygon rows
+            selectorContainer.appendChild(baseToggleBtn);
+            selectorContainer.appendChild(polygonRowsContainer);
             
             // Add selector as DOM widget
             const selectorWidget = this.addDOMWidget("polygon_selector", "POLYGON_SELECTOR", selectorContainer, {
                 serialize: false,
             });
             selectorWidget.computeSize = function() {
-                return [200, 70];
+                return [320, 74];
             };
             
             // Add Clear Active button
@@ -242,9 +288,28 @@ app.registerExtension({
                 for (let i = 0; i < 6; i++) {
                     node.polygons[i].points = [];
                 }
+                // Also reset base layer to empty
+                if (node.baseLayer) {
+                    node.baseLayer = false;
+                    node.updateBaseLayerButton();
+                }
                 node.updatePolygonData();
                 node.renderCanvas();
             });
+
+            // If the underlying node input widget exists, set its initial value and watch for changes
+            const baseWidgetInit = this.widgets.find(w => w.name === "base_layer");
+            if (baseWidgetInit) {
+                baseWidgetInit.value = this.baseLayer;
+                // Watch for changes from the widget toggle
+                const origCallback = baseWidgetInit.callback;
+                baseWidgetInit.callback = function(value) {
+                    if (origCallback) origCallback.apply(this, arguments);
+                    node.baseLayer = value;
+                    node.updateBaseLayerButton();
+                    node.renderCanvas();
+                };
+            }
             
             // Create container for our canvas
             const container = document.createElement("div");
@@ -542,6 +607,37 @@ app.registerExtension({
             return null;
         };
         
+        // Check if any polygon has points
+        nodeType.prototype.hasAnyPolygonPoints = function() {
+            for (let i = 0; i < 6; i++) {
+                if (this.polygons[i].points.length > 0) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        
+        // Update base layer button appearance to match current state
+        nodeType.prototype.updateBaseLayerButton = function() {
+            if (this.baseToggleBtn) {
+                this.baseToggleBtn.textContent = this.baseLayer ? "Base Layer:\nFull" : "Base Layer:\nEmpty";
+                this.baseToggleBtn.style.background = this.baseLayer ? "#3a3a3a" : "#1a1a1a";
+                this.baseToggleBtn.style.borderColor = this.baseLayer ? "#888" : "#444";
+            }
+            const baseWidget = this.widgets?.find(w => w.name === "base_layer");
+            if (baseWidget) baseWidget.value = this.baseLayer;
+        };
+        
+        // Auto-switch base layer to full if adding subtractive polygon with no existing points
+        nodeType.prototype.autoSwitchBaseLayerIfNeeded = function() {
+            const activeMode = this.polygons[this.activePolygonIndex].mode;
+            // If in subtractive mode and no polygons have points yet, switch base to full
+            if (activeMode === "subtract" && !this.hasAnyPolygonPoints() && !this.baseLayer) {
+                this.baseLayer = true;
+                this.updateBaseLayerButton();
+            }
+        };
+        
         // Setup canvas events
         nodeType.prototype.setupCanvasEvents = function() {
             const node = this;
@@ -585,6 +681,7 @@ app.registerExtension({
                         canvas.setPointerCapture(e.pointerId);
                     } else if (node.hoveredLineIndex !== -1) {
                         // Insert point on active polygon's line
+                        node.autoSwitchBaseLayerIfNeeded();
                         const imgCoords = node.canvasToImage(x, y);
                         const insertIndex = node.hoveredLineIndex + 1;
                         node.polygons[node.activePolygonIndex].points.splice(insertIndex, 0, { x: imgCoords.x, y: imgCoords.y });
@@ -594,6 +691,7 @@ app.registerExtension({
                         node.renderCanvas();
                     } else {
                         // Add point to active polygon
+                        node.autoSwitchBaseLayerIfNeeded();
                         const imgCoords = node.canvasToImage(x, y);
                         node.polygons[node.activePolygonIndex].points.push({ x: imgCoords.x, y: imgCoords.y });
                         node.updatePolygonData();
@@ -734,6 +832,18 @@ app.registerExtension({
                 } catch (e) {
                     return;
                 }
+                // Visualize base layer: subtle overlay + white border when base is full (true)
+                if (this.baseLayer) {
+                    ctx.save();
+                    // Subtle white overlay
+                    ctx.fillStyle = "rgba(255,255,255,0.08)";
+                    ctx.fillRect(0, 0, w, h);
+                    // White border outline
+                    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(2, 2, w - 4, h - 4);
+                    ctx.restore();
+                }
             } else {
                 ctx.fillStyle = "#555";
                 ctx.font = "14px sans-serif";
@@ -855,6 +965,7 @@ app.registerExtension({
             if (onSerialize) onSerialize.apply(this, arguments);
             o.multi_polygons = this.polygons;
             o.multi_activeIndex = this.activePolygonIndex;
+            o.multi_baseLayer = this.baseLayer;
         };
         
         // Deserialization
@@ -874,6 +985,16 @@ app.registerExtension({
             
             if (o.multi_activeIndex !== undefined) {
                 this.activePolygonIndex = o.multi_activeIndex;
+            }
+
+            if (o.multi_baseLayer !== undefined) {
+                // Handle both old string format and new boolean format for backwards compatibility
+                if (typeof o.multi_baseLayer === "string") {
+                    this.baseLayer = o.multi_baseLayer === "full";
+                } else {
+                    this.baseLayer = o.multi_baseLayer;
+                }
+                this.updateBaseLayerButton();
             }
             
             this.updatePolygonData();

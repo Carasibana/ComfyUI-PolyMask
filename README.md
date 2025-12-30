@@ -7,7 +7,7 @@ A ComfyUI custom node for creating polygon masks directly in the workflow editor
 ## Features
 
 - **Poly Mask Loader** - Single polygon mask creation
-- **Poly Mask Loader (Multi)** - Up to 6 polygon masks with additive/subtractive modes
+- **Poly Mask Loader (Multi)** - Up to 6 polygon masks with additive/subtractive modes and base layer control
 
 ### Controls
 
@@ -19,6 +19,9 @@ A ComfyUI custom node for creating polygon masks directly in the workflow editor
 | Right click on point | Delete point |
 | Click button in + row | Set polygon to additive mode & select |
 | Click button in − row | Set polygon to subtractive mode & select |
+| Click "Base Layer" button | Toggle base layer between empty and full |
+| Click "Clear Active" button | Clear all points from the active polygon |
+| Click "Clear All" button | Clear all points from all polygons and reset base layer to empty |
 
 ### Polygon Modes
 
@@ -30,6 +33,21 @@ A ComfyUI custom node for creating polygon masks directly in the workflow editor
 - Polygons are processed in order (1→6)
 - Higher-numbered polygons override lower ones in overlapping areas
 - Subtractive polygons appear with darker colors and dashed lines
+
+### Base Layer
+
+The **Base Layer** button (left side of polygon selector) controls the starting state of the mask:
+
+| State | Value | Effect |
+|-------|-------|--------|
+| **Empty** (default) | `false` | Base layer of mask starts transparent |
+| **Full** | `true` | Base layer of mask starts fully opaque |
+
+**Visual Indicator:** When base layer is set to **Full**, the canvas displays a subtle white overlay and border outline.
+
+**Auto-Switch Behavior:** When you add the first point to a subtractive polygon while the base layer is empty and no other polygons exist, the base layer automatically switches to **Full** (since subtractive mode requires something to subtract from).
+
+**Note:** The `base_layer` input is a boolean parameter. When connecting external nodes to control the base layer state, use `false` for empty and `true` for full.
 
 ### Parameters
 
@@ -65,7 +83,9 @@ Find the nodes under the **image** category:
 3. Click a number in the **+** row to create an additive polygon
 4. Draw points on the canvas to define the mask area
 5. Optionally click a number in the **−** row to create a subtractive polygon that cuts out from existing masks
+   - The base layer will automatically switch to **Full** when you add your first subtractive point (if it was empty and no other polygons exist)
 6. Adjust feathering as needed
+7. Use the **Base Layer** button to manually toggle between Empty and Full if needed
 
 ## License
 

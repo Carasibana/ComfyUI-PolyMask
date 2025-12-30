@@ -34,22 +34,23 @@ class PolyMaskNodeMulti:
                     "display": "slider"
                 }),
                 "polygon_data": ("STRING", {"default": "[]", "multiline": False}),
+                "base_layer": ("BOOLEAN", {"default": False}),
             },
         }
     
     @classmethod
-    def IS_CHANGED(cls, image, feathering, polygon_data="[]"):
+    def IS_CHANGED(cls, image, feathering, polygon_data="[]", base_layer=False):
         image_path = folder_paths.get_annotated_filepath(image)
         m_time = os.path.getmtime(image_path)
-        return f"{image}_{m_time}_{feathering}_{polygon_data}"
+        return f"{image}_{m_time}_{feathering}_{polygon_data}_{base_layer}"
     
     @classmethod
-    def VALIDATE_INPUTS(cls, image, feathering, polygon_data="[]"):
+    def VALIDATE_INPUTS(cls, image, feathering, polygon_data="[]", base_layer=False):
         if not folder_paths.exists_annotated_filepath(image):
             return f"Invalid image file: {image}"
         return True
     
-    def load_image_and_mask(self, image, feathering, polygon_data="[]"):
+    def load_image_and_mask(self, image, feathering, polygon_data="[]", base_layer=False):
         image_path = folder_paths.get_annotated_filepath(image)
         img = Image.open(image_path)
         
@@ -71,7 +72,7 @@ class PolyMaskNodeMulti:
             polygons = []
         
         width, height = img.size
-        mask_array = self._create_combined_mask(width, height, polygons, feathering)
+        mask_array = self._create_combined_mask(width, height, polygons, feathering, base_layer)
         
         mask_tensor = torch.from_numpy(mask_array).unsqueeze(0)
         
@@ -95,9 +96,12 @@ class PolyMaskNodeMulti:
             pass
         return img
     
-    def _create_combined_mask(self, width, height, polygons, feather_amount):
-        # Start with empty mask
-        combined_mask = np.zeros((height, width), dtype=np.float32)
+    def _create_combined_mask(self, width, height, polygons, feather_amount, base_layer=False):
+        # Start with base layer: True=full (ones), False=empty (zeros)
+        if base_layer:
+            combined_mask = np.ones((height, width), dtype=np.float32)
+        else:
+            combined_mask = np.zeros((height, width), dtype=np.float32)
         
         # Process polygons in order (0-5) - higher index overrides lower
         for polygon_obj in polygons:
@@ -120,12 +124,9 @@ class PolyMaskNodeMulti:
                     # Subtractive: remove from existing mask
                     combined_mask = np.where(mask_array > 0, 0, combined_mask)
         
-        # If no valid polygons, return all white (no mask)
-        if combined_mask.max() == 0 and not any(
-            p.get('mode') == 'subtract' and len(p.get('points', [])) >= 3 
-            for p in polygons
-        ):
-            return np.ones((height, width), dtype=np.float32)
+        # If there are no polygons at all, return the base layer as-is
+        if not polygons or len(polygons) == 0:
+            return combined_mask
         
         # Apply feathering to combined mask
         if feather_amount > 0:
