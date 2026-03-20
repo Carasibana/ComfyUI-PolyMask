@@ -2,6 +2,11 @@
 
 A ComfyUI custom node for creating polygon masks directly in the workflow editor.
 
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
 ![Demo](screenshots/demo.png)
 
 ## Features
