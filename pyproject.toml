@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-polymask"
-description = "ComfyUI nodes for loading images and drawing polygon masks interactively on them"
+description = "ComfyUI nodes for loading images and drawing polygon masks interactively on them with a polygon lasso style tool"
 version = "1.0.3"
 license = { file = "LICENSE" }
 dependencies = ["numpy", "torch"]
